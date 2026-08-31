@@ -1,5 +1,48 @@
+# --- secrets -----------------------------------------------------------
+# .env holds WEBHOOK_URL and any n8n auth credential. Never commit it.
 .env
 .env.*
 !.env.example
+
+# credentials that tend to get dropped into a project dir by accident
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+credentials.json
+secrets.json
+service-account*.json
+*_rsa
+*_rsa.pub
+.netrc
+.npmrc
+
+# --- dependencies / build ---------------------------------------------
 node_modules/
+dist/
+build/
+.cache/
+
+# --- logs & runtime ----------------------------------------------------
+*.log
+npm-debug.log*
+yarn-error.log*
+pids/
+*.pid
+
+# --- editor / OS -------------------------------------------------------
 .DS_Store
+.DS_Store?
+._*
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- local scratch -----------------------------------------------------
+tmp/
+temp/
+*.local
+Screenshot *.png
