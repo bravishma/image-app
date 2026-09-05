@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-node server.js          # run the app -> http://localhost:8000
+node dev-server.js          # run the app -> http://localhost:8000
 ```
 
 No dependencies, no build step, no `npm install`, no `package.json`. Node 18+
@@ -39,7 +39,7 @@ browser (index.html)  ──POST /api/blend──►  server.js  ──POST─�
   wired by a single `createUploadSlot()` factory. UI state is one
   `data-state` attribute (`idle`/`ready`/`loading`/`done`/`error`) on `#app`
   that CSS keys off; `setState()` is the only mutator.
-- **`server.js`** — a zero-dependency proxy. Also serves `index.html`.
+- **`dev-server.js`** — a zero-dependency proxy. Also serves `index.html`.
 
 ### Why the proxy exists
 
@@ -54,7 +54,7 @@ the entire security model.
 
 ### Footgun: CSP hashes are computed at boot
 
-`server.js` sha256-hashes the inline `<script>` and `<style>` blocks of
+`dev-server.js` sha256-hashes the inline `<script>` and `<style>` blocks of
 `index.html` at startup and emits them in the CSP (deliberately avoiding
 `unsafe-inline`). **After editing `index.html` you must restart the server**, or
 the browser silently refuses to execute the page's JavaScript — the page renders
@@ -93,7 +93,7 @@ later". Check whether it reproduces before treating it as transient.
 
 - `index.html` must stay self-contained (no external assets, no CDN) — the CSP
   is `default-src 'none'` with `connect-src 'self'`.
-- Client-side file validation (10MB, PNG/JPG/WEBP) is duplicated in `server.js`
+- Client-side file validation (10MB, PNG/JPG/WEBP) is duplicated in `dev-server.js`
   only as a total-body cap; the proxy does not parse multipart.
 - Object URLs are revoked before every replacement — keep that discipline when
   adding image sources.

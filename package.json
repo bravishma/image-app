@@ -4,8 +4,7 @@
   "private": true,
   "description": "Blend two images via an n8n workflow, with the webhook URL kept server-side",
   "scripts": {
-    "dev": "node server.js",
+    "dev": "node dev-server.js",
     "csp": "node scripts/update-csp.js"
-  },
-  "engines": { "node": ">=18" }
+  }
 }

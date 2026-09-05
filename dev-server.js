@@ -3,6 +3,12 @@
  * Local dev server. Serves index.html and routes /api/blend to the SAME
  * handler Vercel runs (api/blend.js), so local and deployed cannot drift.
  *
+ * NOT named server.js on purpose: Vercel auto-detects a root server.js and
+ * makes it the entire deployment's entrypoint, which bundles everything into
+ * one lambda, ignores api/, and never serves index.html. Renaming this file
+ * is what keeps the zero-config static + api/ layout working. Do not rename
+ * it back.
+ *
  * On Vercel this file is not used at all — the platform invokes
  * api/blend.js directly and serves index.html as a static asset.
  */

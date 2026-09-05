@@ -8,7 +8,7 @@ downloadable.
 
 ```bash
 cp .env.example .env     # then put your real webhook URL in .env
-node server.js           # http://localhost:8000
+node dev-server.js           # http://localhost:8000
 ```
 
 No dependencies, no build step, no `npm install`. Node 18+ (uses built-in `fetch`).
@@ -24,7 +24,7 @@ Two files do all the work:
 
 - **`index.html`** — the entire UI: upload slots, previews, validation, state
   machine, result viewer. Inline CSS/JS, no framework.
-- **`server.js`** — a proxy that holds the webhook URL and enforces limits.
+- **`dev-server.js`** — a proxy that holds the webhook URL and enforces limits.
 
 ### Why the proxy exists
 
@@ -34,7 +34,7 @@ inlining it into client-side JavaScript would **not** help — the value still
 ships to the browser in plain text. Only a server the browser talks to
 *instead* actually hides it.
 
-So `index.html` posts to same-origin `/api/blend`, and `server.js` reads
+So `index.html` posts to same-origin `/api/blend`, and `dev-server.js` reads
 `WEBHOOK_URL` from `.env` and forwards the request.
 
 ## Configuration (`.env`)
