@@ -89,6 +89,23 @@ which behaves identically across all of them:
 n8n reports several internal node failures as "Service unavailable — try again
 later". Check whether it reproduces before treating it as transient.
 
+## Deployment (Vercel)
+
+Zero-config: `index.html` is served statically and each file in `api/` becomes
+a function. Two things must stay true or every URL returns
+`FUNCTION_INVOCATION_FAILED`:
+
+- **No `package.json` at the root.** Its presence makes Vercel classify the
+  repo as a Node.js *server* project and look for a server entrypoint,
+  which collapses the whole deployment into one lambda (or fails the build).
+  The project has no dependencies, so it does not need one.
+- **No `server.js`/`app.js`/`index.js`/`main.js` at the root**, for the same
+  reason — Vercel auto-detects those names as the app entrypoint. The local
+  dev server is deliberately called `dev-server.js`.
+
+`WEBHOOK_URL` must be set in the Vercel project's environment variables;
+`.env` is local-only and never uploaded.
+
 ## Constraints
 
 - `index.html` must stay self-contained (no external assets, no CDN) — the CSP
