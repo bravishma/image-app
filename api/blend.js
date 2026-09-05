@@ -22,6 +22,12 @@ const RATE_WINDOW = Number(process.env.RATE_WINDOW_MS || 5 * 60 * 1000);
 // needs a shared store (Vercel KV / Upstash).
 const hits = new Map();
 
+function sendJson(res, status, obj) {
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify(obj));
+}
+
 function rateLimited(ip) {
   const now = Date.now();
   const recent = (hits.get(ip) || []).filter((t) => now - t < RATE_WINDOW);
@@ -35,9 +41,16 @@ function rateLimited(ip) {
 }
 
 function readRawBody(req, limit) {
-  // Vercel may have already buffered the body depending on content type.
+  // The runtime may have already buffered or parsed the body for us. If the
+  // stream is spent, reading it again yields nothing and the upstream call
+  // silently sends an empty payload — so handle every shape explicitly.
   if (Buffer.isBuffer(req.body)) return Promise.resolve(req.body);
   if (typeof req.body === 'string') return Promise.resolve(Buffer.from(req.body));
+  if (req.body && typeof req.body === 'object' && !req.readable) {
+    return Promise.reject(Object.assign(
+      new Error('request body was pre-parsed and is no longer readable'),
+      { code: 'BODY_CONSUMED' }));
+  }
 
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -56,19 +69,35 @@ function readRawBody(req, limit) {
   });
 }
 
+// Any unhandled throw here surfaces as an opaque FUNCTION_INVOCATION_FAILED
+// with no message, so wrap the whole handler and report something actionable.
 module.exports = async function handler(req, res) {
+  try {
+    return await blend(req, res);
+  } catch (err) {
+    console.error('unhandled error in /api/blend:', err && err.stack || err);
+    try {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return res.end(JSON.stringify({
+        error: 'Server error.',
+        detail: String((err && err.message) || err),
+      }));
+    } catch (_) { /* response already sent */ }
+  }
+};
+
+async function blend(req, res) {
   res.setHeader('Cache-Control', 'no-store');
 
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
-    return res.status(405).json({ error: 'Method not allowed.' });
+    return sendJson(res, 405, { error: 'Method not allowed.' });
   }
 
   if (!WEBHOOK_URL) {
     console.error('WEBHOOK_URL is not set in the environment');
-    return res.status(500).json({
-      error: 'Server is not configured. WEBHOOK_URL is missing.',
-    });
+    return sendJson(res, 500, { error: 'Server is not configured. WEBHOOK_URL is missing.' });
   }
 
   const fwd = req.headers['x-forwarded-for'];
@@ -76,22 +105,25 @@ module.exports = async function handler(req, res) {
     || req.socket?.remoteAddress || 'unknown';
 
   if (rateLimited(ip)) {
-    return res.status(429).json({ error: 'Too many requests. Wait a few minutes and try again.' });
+    return sendJson(res, 429, { error: 'Too many requests. Wait a few minutes and try again.' });
   }
 
   const ctype = req.headers['content-type'] || '';
   if (!ctype.toLowerCase().startsWith('multipart/form-data')) {
-    return res.status(415).json({ error: 'Expected multipart/form-data.' });
+    return sendJson(res, 415, { error: 'Expected multipart/form-data.' });
   }
 
   let body;
   try {
     body = await readRawBody(req, MAX_BODY);
   } catch (err) {
-    if (err.code === 'TOO_LARGE') {
-      return res.status(413).json({ error: 'Images are too large. Try smaller photos.' });
+    if (err.code === 'BODY_CONSUMED') {
+      return sendJson(res, 500, { error: 'Server could not read the upload stream.' });
     }
-    return res.status(400).json({ error: 'Could not read the upload.' });
+    if (err.code === 'TOO_LARGE') {
+      return sendJson(res, 413, { error: 'Images are too large. Try smaller photos.' });
+    }
+    return sendJson(res, 400, { error: 'Could not read the upload.' });
   }
 
   const headers = { 'Content-Type': ctype };
@@ -108,13 +140,13 @@ module.exports = async function handler(req, res) {
     const buf = Buffer.from(await upstream.arrayBuffer());
     // Pass the status through; never echo upstream headers that would
     // identify the endpoint.
-    res.status(upstream.status);
+    res.statusCode = upstream.status;
     res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
     return res.end(buf);
   } catch (err) {
     const timedOut = err.name === 'TimeoutError' || err.name === 'AbortError';
     console.error('blend failed:', err.name, err.message);
-    return res.status(timedOut ? 504 : 502).json({
+    return sendJson(res, timedOut ? 504 : 502, {
       error: timedOut ? 'The image service timed out.' : 'The image service is unavailable.',
     });
   }
