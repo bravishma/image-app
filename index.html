@@ -453,6 +453,54 @@
     createUploadSlot('image2', 'Slot 2 — Accessory', 'Hat or accessory')
   ];
 
+  // --------------------------------------------------- upload preparation
+  // Vercel rejects request bodies over ~4.5MB, but the picker accepts 10MB
+  // per file. Downscale before sending: Gemini downscales internally anyway,
+  // so this costs no visible quality and makes requests much faster.
+  var UPLOAD_TARGET_BYTES = 1.6 * 1024 * 1024;   // per image
+  var MAX_EDGE = 1536;
+
+  function loadImage(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload  = function () { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('Could not read that image.')); };
+      img.src = url;
+    });
+  }
+
+  function canvasToBlob(canvas, type, quality) {
+    return new Promise(function (resolve) { canvas.toBlob(resolve, type, quality); });
+  }
+
+  async function prepareForUpload(file) {
+    if (file.size <= UPLOAD_TARGET_BYTES) return file;
+
+    var img = await loadImage(file);
+    // Keep PNG for PNGs: accessory cut-outs rely on the alpha channel, and
+    // re-encoding those as JPEG would flatten transparency to black.
+    var type = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    var edge = MAX_EDGE, quality = 0.9, out = null;
+
+    for (var attempt = 0; attempt < 5; attempt++) {
+      var scale = Math.min(1, edge / Math.max(img.width, img.height));
+      var c = document.createElement('canvas');
+      c.width  = Math.max(1, Math.round(img.width  * scale));
+      c.height = Math.max(1, Math.round(img.height * scale));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+
+      out = await canvasToBlob(c, type, quality);
+      if (out && out.size <= UPLOAD_TARGET_BYTES) break;
+      edge = Math.round(edge * 0.75);
+      if (type === 'image/jpeg') quality = Math.max(0.6, quality - 0.1);
+    }
+
+    if (!out) return file;                       // canvas failed: send the original
+    var base = file.name.replace(/\.[^.]+$/, '');
+    return new File([out], base + (type === 'image/png' ? '.png' : '.jpg'), { type: type });
+  }
+
   // ------------------------------------------------------ response shapes
   // n8n may return raw binary or JSON (URL / data URI / bare base64), so try
   // each shape in turn rather than assuming one.
@@ -535,8 +583,16 @@
   async function submit() {
     if (!bothReady()) return;
 
+    setState('loading', 'Preparing images...');
+
     var form = new FormData();
-    slots.forEach(function (s) { form.append(s.name, s.file, s.file.name); });
+    try {
+      var prepared = await Promise.all(slots.map(function (s) { return prepareForUpload(s.file); }));
+      slots.forEach(function (s, i) { form.append(s.name, prepared[i], prepared[i].name); });
+    } catch (err) {
+      setState('error', 'Image processing failed. Please try again.', String((err && err.message) || err));
+      return;
+    }
 
     controller = new AbortController();
     var timer = setTimeout(function () { controller.abort('timeout'); }, TIMEOUT_MS);

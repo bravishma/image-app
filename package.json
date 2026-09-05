@@ -1,0 +1,11 @@
+{
+  "name": "image-blender",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Blend two images via an n8n workflow, with the webhook URL kept server-side",
+  "scripts": {
+    "dev": "node server.js",
+    "csp": "node scripts/update-csp.js"
+  },
+  "engines": { "node": ">=18" }
+}
