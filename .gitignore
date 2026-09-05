@@ -46,3 +46,5 @@ tmp/
 temp/
 *.local
 Screenshot *.png
+.vercel
+.env*.local
