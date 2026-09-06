@@ -81,6 +81,29 @@ Supabase's built-in SMTP caps out at a couple of emails per hour — signups
 then fail with `over_email_send_rate_limit`. `api/auth/signup.js` detects the
 session-less response and reports it rather than failing cryptically.
 
+### Deliberate: sign-in errors say which half was wrong
+
+`/api/auth/login` distinguishes "no account with that email" from "incorrect
+password". GoTrue refuses to make that distinction — it returns an identical
+`invalid_credentials` for both — so `public.email_registered()` (a
+`security definer` function granted to `anon`) supplies the boolean.
+
+**This makes the app an account-enumeration oracle**: anyone can test which
+emails have accounts, either through the login form or by calling
+`/rest/v1/rpc/email_registered` directly. That was accepted knowingly in
+exchange for clearer errors on a test app. Reverse both the function and the
+branch in `api/auth/login.js` before real users sign up.
+
+It also means `get_advisors` now reports lints 0028/0029 against
+`email_registered`. That finding is expected — do not "fix" it by revoking
+`anon`'s EXECUTE, which would silently break the feature (`lib/supabase.js`
+calls it with the anon key).
+
+A `service_role` key was deliberately *not* used for this: it bypasses all RLS,
+whereas the function exposes exactly one boolean. When the lookup fails for any
+reason the endpoint falls back to the generic message rather than asserting
+something it could not verify.
+
 ### Footgun: the gate is a second attribute, not a `data-state` value
 
 `data-state` is a single-slot enum that ~10 CSS rules key off and that

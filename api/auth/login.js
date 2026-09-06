@@ -53,8 +53,19 @@ module.exports = async function handler(req, res) {
     if (/not_confirmed|not confirmed/i.test(code)) {
       return json(res, 403, { error: 'Confirm your email address before signing in.' });
     }
-    // One message for both unknown-email and wrong-password, so this endpoint
-    // cannot be used to enumerate who has an account.
+    // Say which of the two actually failed. This is deliberately NOT the
+    // anti-enumeration default -- see the note on public.email_registered.
+    const exists = await sb.emailRegistered(email);
+    if (exists === false) {
+      return json(res, 401, {
+        error: 'No account found with that email. Create one first.',
+        reason: 'no_account',
+      });
+    }
+    if (exists === true) {
+      return json(res, 401, { error: 'Incorrect password.', reason: 'bad_password' });
+    }
+    // Lookup failed: do not claim something we could not verify.
     return json(res, 401, { error: 'Incorrect email or password.' });
   }
 
