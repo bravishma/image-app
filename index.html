@@ -581,7 +581,9 @@
       authError.textContent = 'Could not reach the server. Check your connection.';
     } finally {
       authSubmit.disabled = false;
-      setMode(gate.dataset.mode);              // restores the button label
+      // Restore the label directly. Calling setMode() here would also wipe the
+      // error we just set, so the message vanished the instant it appeared.
+      authSubmit.textContent = gate.dataset.mode === 'signup' ? 'Create account' : 'Sign in';
     }
   }
 
