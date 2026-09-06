@@ -52,6 +52,43 @@ lives only in `.env` on the server, and the browser posts to same-origin
 **Do not reintroduce the webhook URL into `index.html`.** That silently undoes
 the entire security model.
 
+### Auth (Supabase), same proxy pattern
+
+Sign-up / sign-in run through `api/auth/*`, which call Supabase's GoTrue REST
+API with built-in `fetch`. The browser never talks to `*.supabase.co` — it
+can't: the CSP is `connect-src 'self'`. Two constraints force this shape and
+both are load-bearing:
+
+- **No `@supabase/supabase-js`.** Installing it means a `package.json`, which
+  breaks the Vercel deployment (see below). `lib/supabase.js` is the whole
+  client, ~70 lines of `fetch`.
+- **Sessions are httpOnly cookies** (`sb_at` / `sb_rt`), set by the API
+  functions. No token is ever readable from page JavaScript. `requireUser()`
+  in `lib/auth.js` validates the access token and silently refreshes it, so
+  both `/api/blend` and `/api/auth/session` get refresh for free.
+
+`Secure` is set on those cookies only over https — the local dev server speaks
+plain http, which would otherwise drop them silently.
+
+The user's name lives in `public.profiles`, populated from
+`raw_user_meta_data` by the `on_auth_user_created` trigger. Never base an RLS
+policy on `user_metadata`: it is user-editable (Supabase lint 0015), which is
+the whole reason the name is mirrored into a real column.
+
+**"Confirm email" must stay OFF** in the Supabase dashboard (Authentication ->
+Providers -> Email). With it on, signup returns a user but no session, and
+Supabase's built-in SMTP caps out at a couple of emails per hour — signups
+then fail with `over_email_send_rate_limit`. `api/auth/signup.js` detects the
+session-less response and reports it rather than failing cryptically.
+
+### Footgun: the gate is a second attribute, not a `data-state` value
+
+`data-state` is a single-slot enum that ~10 CSS rules key off and that
+`setState()` overwrites on every transition. The auth gate therefore uses an
+**independent** `data-auth` attribute (`checking`/`out`/`in`) on the same
+`#app` element. Adding a `locked` value to `data-state` instead would mean
+auditing every one of those rules.
+
 ### Footgun: CSP hashes are computed at boot
 
 `dev-server.js` sha256-hashes the inline `<script>` and `<style>` blocks of
@@ -103,8 +140,12 @@ a function. Two things must stay true or every URL returns
   reason — Vercel auto-detects those names as the app entrypoint. The local
   dev server is deliberately called `dev-server.js`.
 
-`WEBHOOK_URL` must be set in the Vercel project's environment variables;
-`.env` is local-only and never uploaded.
+`WEBHOOK_URL`, `SUPABASE_URL` and `SUPABASE_ANON_KEY` must be set in the
+Vercel project's environment variables; `.env` is local-only and never
+uploaded. Vercel turns every file under `api/` into its own function,
+nested ones included, so `api/auth/login.js` serves `/api/auth/login`.
+`dev-server.js` has to map those paths by hand — the `API` table near the top
+must mirror the `api/` tree or a route 404s locally while working in prod.
 
 ## Constraints
 

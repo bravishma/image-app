@@ -222,6 +222,118 @@
   #cancel { display: none; }
   [data-state="loading"] #cancel { display: inline-block; }
 
+  /* ---------- auth gate ---------- */
+  /* data-auth is a second, independent axis from data-state: the blender's
+     own state machine is untouched, the gate simply hides everything else.
+     While "checking" both are hidden, so a signed-in user never sees the
+     login form flash before their session resolves. */
+  #app:not([data-auth="in"]) > *:not(#gate) { display: none; }
+  #gate { display: none; }
+  #app[data-auth="out"] #gate { display: block; }
+
+  #gate { max-width: 400px; margin: 24px auto 0; }
+  .gate-head { text-align: center; margin-bottom: 28px; }
+  .gate-head h2 { margin: 0 0 8px; font-size: 26px; font-weight: 650; letter-spacing: -0.02em; }
+  .gate-head p { margin: 0; color: var(--muted); }
+
+  .gate-note {
+    margin: 0 0 18px;
+    padding: 11px 14px;
+    background: var(--accent-soft);
+    border: 1px solid #FFD9C4;
+    border-radius: 10px;
+    color: #8A4A20;
+    font-size: 13px;
+    line-height: 1.45;
+    text-align: center;
+  }
+  .gate-note strong { font-weight: 650; }
+
+  .gate-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 26px 24px;
+  }
+
+  .gate-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg);
+    border-radius: 999px;
+    padding: 4px;
+    margin-bottom: 22px;
+  }
+  .gate-tabs button {
+    flex: 1;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 600;
+    padding: 9px 0;
+  }
+  .gate-tabs button[aria-selected="true"] {
+    background: var(--surface);
+    color: var(--ink);
+    box-shadow: var(--shadow);
+  }
+
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .field input {
+    width: 100%;
+    font: inherit;
+    color: var(--ink);
+    background: var(--bg);
+    border: 1.5px solid var(--line);
+    border-radius: 10px;
+    padding: 11px 13px;
+  }
+  .field input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--surface);
+  }
+  .field .hint { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); font-weight: 400; }
+
+  #gate[data-mode="login"] .signup-only { display: none; }
+
+  #auth-submit { width: 100%; margin-top: 8px; }
+  .gate-error {
+    margin: 14px 0 0;
+    min-height: 1.2em;
+    color: var(--danger);
+    font-size: 14px;
+    text-align: center;
+  }
+
+  /* ---------- signed-in strip ---------- */
+  .whoami {
+    display: none;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+    font-size: 14px;
+    color: var(--muted);
+  }
+  #app[data-auth="in"] .whoami { display: flex; }
+  #signout {
+    border: 1.5px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    padding: 5px 14px;
+    font-size: 13px;
+  }
+  #signout:hover { border-color: var(--ink); color: var(--ink); }
+
   /* ---------- result ---------- */
   .result { display: none; margin-top: 36px; }
   [data-state="done"] .result { display: block; }
@@ -257,11 +369,54 @@
 </head>
 <body>
 
-<div id="app" data-state="idle">
+<div id="app" data-state="idle" data-auth="checking">
+
+  <section id="gate" data-mode="login">
+    <div class="gate-head">
+      <h2>AI Image Blender</h2>
+      <p>Sign in to generate images.</p>
+    </div>
+
+    <p class="gate-note">
+      <strong>Test login.</strong> Accounts here are for testing only &mdash;
+      no confirmation email is sent, and nothing is verified.
+    </p>
+
+    <div class="gate-card">
+      <div class="gate-tabs" role="tablist">
+        <button type="button" id="tab-login" role="tab" aria-selected="true">Sign in</button>
+        <button type="button" id="tab-signup" role="tab" aria-selected="false">Create account</button>
+      </div>
+
+      <!-- A real <form> so password managers recognise it, but submitted via
+           fetch: the CSP sets form-action 'none', which blocks a native POST. -->
+      <form id="auth-form" novalidate>
+        <div class="field signup-only">
+          <label for="auth-name">Name</label>
+          <input id="auth-name" name="name" type="text" autocomplete="name" maxlength="80">
+        </div>
+        <div class="field">
+          <label for="auth-email">Email</label>
+          <input id="auth-email" name="email" type="email" autocomplete="email" required>
+        </div>
+        <div class="field">
+          <label for="auth-password">Password</label>
+          <input id="auth-password" name="password" type="password" autocomplete="current-password" required>
+          <span class="hint signup-only">At least 8 characters.</span>
+        </div>
+        <button class="btn-primary" id="auth-submit" type="submit">Sign in</button>
+        <p class="gate-error" id="auth-error" role="alert" aria-live="polite"></p>
+      </form>
+    </div>
+  </section>
 
   <header>
     <h1>AI Image Blender</h1>
     <p class="subtitle">Upload a subject and an accessory &mdash; get one composited image back.</p>
+    <div class="whoami">
+      <span id="whoami-name"></span>
+      <button type="button" id="signout">Sign out</button>
+    </div>
   </header>
 
   <div class="badge-wrap">
@@ -351,6 +506,102 @@
 
   var controller = null;   // shared by the 60s timer and the Cancel button
   var resultUrl  = null;   // object URL for the returned image, revoked on replace
+
+  // ----------------------------------------------------------------- auth
+  // Sessions are httpOnly cookies set by /api/auth/*, so there is no token
+  // here to read or store; the cookie rides along on every same-origin fetch.
+  var gate       = document.getElementById('gate');
+  var authForm   = document.getElementById('auth-form');
+  var authName   = document.getElementById('auth-name');
+  var authEmail  = document.getElementById('auth-email');
+  var authPass   = document.getElementById('auth-password');
+  var authSubmit = document.getElementById('auth-submit');
+  var authError  = document.getElementById('auth-error');
+  var tabLogin   = document.getElementById('tab-login');
+  var tabSignup  = document.getElementById('tab-signup');
+  var whoamiName = document.getElementById('whoami-name');
+  var signoutBtn = document.getElementById('signout');
+
+  function setMode(mode) {
+    gate.dataset.mode = mode;
+    var signup = mode === 'signup';
+    tabLogin.setAttribute('aria-selected', String(!signup));
+    tabSignup.setAttribute('aria-selected', String(signup));
+    authSubmit.textContent = signup ? 'Create account' : 'Sign in';
+    authPass.setAttribute('autocomplete', signup ? 'new-password' : 'current-password');
+    authError.textContent = '';
+  }
+
+  function setSignedIn(user) {
+    if (user) {
+      whoamiName.textContent = 'Signed in as ' + (user.name || user.email || 'you');
+      app.dataset.auth = 'in';
+    } else {
+      whoamiName.textContent = '';
+      app.dataset.auth = 'out';
+    }
+  }
+
+  async function postJson(url, payload) {
+    var res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    var data = null;
+    try { data = await res.json(); } catch (e) { /* empty body */ }
+    return { ok: res.ok, status: res.status, data: data || {} };
+  }
+
+  async function onAuthSubmit(e) {
+    e.preventDefault();                        // form-action 'none' blocks a native POST
+    var signup = gate.dataset.mode === 'signup';
+    var payload = {
+      email: authEmail.value.trim(),
+      password: authPass.value
+    };
+    if (signup) payload.name = authName.value.trim();
+
+    authError.textContent = '';
+    authSubmit.disabled = true;
+    authSubmit.textContent = signup ? 'Creating account...' : 'Signing in...';
+
+    try {
+      var r = await postJson(signup ? '/api/auth/signup' : '/api/auth/login', payload);
+      if (!r.ok) {
+        authError.textContent = r.data.error || 'Something went wrong. Try again.';
+      } else if (r.data.pendingConfirmation) {
+        authError.textContent = r.data.message || 'Check your email to confirm your account.';
+      } else {
+        authPass.value = '';
+        setSignedIn(r.data.user);
+        refreshIdle();
+      }
+    } catch (err) {
+      authError.textContent = 'Could not reach the server. Check your connection.';
+    } finally {
+      authSubmit.disabled = false;
+      setMode(gate.dataset.mode);              // restores the button label
+    }
+  }
+
+  async function signOut() {
+    signoutBtn.disabled = true;
+    try { await postJson('/api/auth/logout', {}); } catch (e) { /* clear locally anyway */ }
+    signoutBtn.disabled = false;
+    setSignedIn(null);
+    setMode('login');
+  }
+
+  async function loadSession() {
+    try {
+      var res = await fetch('/api/auth/session');
+      var data = await res.json();
+      setSignedIn(data && data.user);
+    } catch (err) {
+      setSignedIn(null);
+    }
+  }
 
   // ---------------------------------------------------------------- state
   function setState(next, message, detail) {
@@ -607,6 +858,16 @@
         signal: controller.signal
       });
 
+      // The session expired or was revoked mid-visit: drop back to the gate
+      // rather than showing a generic failure.
+      if (res.status === 401) {
+        setSignedIn(null);
+        setMode('login');
+        authError.textContent = 'Your session expired. Sign in again.';
+        setState('idle', 'Add both images to get started.');
+        return;
+      }
+
       if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
 
       var out = await resolveImageSrc(res);
@@ -649,6 +910,12 @@
   }
 
   // -------------------------------------------------------------- wiring
+  tabLogin.addEventListener('click', function () { setMode('login'); });
+  tabSignup.addEventListener('click', function () { setMode('signup'); });
+  authForm.addEventListener('submit', onAuthSubmit);
+  signoutBtn.addEventListener('click', signOut);
+  loadSession();
+
   generate.addEventListener('click', submit);
 
   cancelBtn.addEventListener('click', function () {

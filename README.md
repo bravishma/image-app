@@ -70,7 +70,22 @@ So `index.html` posts to same-origin `/api/blend`, and `dev-server.js` reads
 The webhook itself is still open to anyone who knows the URL — the proxy hides
 it from *your users*, but does not protect the endpoint. To close that, enable
 **Header Auth** on the n8n Webhook node and set the two `WEBHOOK_AUTH_*` vars.
-There is also no login: anyone who can reach the server can use it.
+
+## Accounts
+
+Sign-up and sign-in run on Supabase Auth. `/api/blend` rejects anyone without a
+valid session, so the UI gate is not the only thing standing between a visitor
+and your Gemini credits.
+
+The browser never contacts Supabase directly — the CSP forbids it — so
+`api/auth/*` proxy to Supabase's REST API and set the session as httpOnly
+cookies. There is no SDK and no `package.json`; `lib/supabase.js` is plain
+`fetch`.
+
+Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` in `.env` (and in the Vercel
+project). In the Supabase dashboard, turn **off** Authentication -> Providers
+-> Email -> "Confirm email" — otherwise signup returns no session and the
+built-in SMTP quota (a couple of emails an hour) blocks real users.
 
 ## n8n workflow notes
 

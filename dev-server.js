@@ -35,11 +35,26 @@ function loadEnv(file) {
 loadEnv(path.join(ROOT, '.env'));
 
 const blend = require('./api/blend.js');
+
+// Vercel turns every file under api/ into its own function. Locally we have to
+// map the same paths by hand, so this table must mirror the api/ tree.
+const API = {
+  '/api/blend': blend,
+  '/api/health': require('./api/health.js'),
+  '/api/auth/signup': require('./api/auth/signup.js'),
+  '/api/auth/login': require('./api/auth/login.js'),
+  '/api/auth/logout': require('./api/auth/logout.js'),
+  '/api/auth/session': require('./api/auth/session.js'),
+};
 const PORT = Number(process.env.PORT || 8000);
 
 if (!process.env.WEBHOOK_URL) {
   console.error('\n  WEBHOOK_URL is not set.\n  Copy .env.example to .env and put the n8n URL there.\n');
   process.exit(1);
+}
+
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+  console.error('\n  SUPABASE_URL / SUPABASE_ANON_KEY are not set.\n  Sign-in will fail until they are in .env.\n');
 }
 
 // Locally the CSP is computed at boot so it can never go stale. On Vercel the
@@ -82,7 +97,7 @@ const server = http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
   for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
 
-  if (url === '/api/blend') return blend(req, shim(res));
+  if (API[url]) return API[url](req, shim(res));
 
   if (req.method === 'GET' || req.method === 'HEAD') {
     if (url === '/' || url === '/index.html') {

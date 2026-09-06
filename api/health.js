@@ -13,6 +13,7 @@ module.exports = function handler(req, res) {
     ok: true,
     node: process.version,
     hasWebhookUrl: Boolean(process.env.WEBHOOK_URL),
+    hasSupabaseConfig: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY),
     webhookUrlLooksValid: /^https?:\/\/.+/.test(process.env.WEBHOOK_URL || ''),
     hasAuthHeader: Boolean(process.env.WEBHOOK_AUTH_HEADER),
     region: process.env.VERCEL_REGION || null,

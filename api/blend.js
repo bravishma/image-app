@@ -6,6 +6,8 @@
  * imports this same handler for local dev, so the two stay in sync.
  */
 
+const { requireUser, clientIp } = require('../lib/auth.js');
+
 const WEBHOOK_URL = process.env.WEBHOOK_URL;
 const AUTH_HEADER = process.env.WEBHOOK_AUTH_HEADER || '';
 const AUTH_VALUE  = process.env.WEBHOOK_AUTH_VALUE  || '';
@@ -100,9 +102,14 @@ async function blend(req, res) {
     return sendJson(res, 500, { error: 'Server is not configured. WEBHOOK_URL is missing.' });
   }
 
-  const fwd = req.headers['x-forwarded-for'];
-  const ip = (Array.isArray(fwd) ? fwd[0] : (fwd || '')).split(',')[0].trim()
-    || req.socket?.remoteAddress || 'unknown';
+  // Establish who this is before anything expensive happens.
+  let user = null;
+  try { user = await requireUser(req, res); } catch { user = null; }
+  if (!user) {
+    return sendJson(res, 401, { error: 'Sign in to generate images.' });
+  }
+
+  const ip = clientIp(req);
 
   if (rateLimited(ip)) {
     return sendJson(res, 429, { error: 'Too many requests. Wait a few minutes and try again.' });
